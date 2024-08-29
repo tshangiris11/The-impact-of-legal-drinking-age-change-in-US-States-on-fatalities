@@ -1,0 +1,498 @@
+---
+title: "PSYC 496 Final Project"
+author: "Kaien Xia & Iris Shang"
+date: "December 11, 2023"
+output:
+  prettydoc::html_pretty:
+    df_print: paged
+    toc: true
+    toc_depth: 3
+    theme: hpstr  
+    number_sections: true
+---
+
+# Project Overview
+
+## Participants 
+Kaien Xia & Iris Shang
+
+## Dataset we use
+data("Fatalities") from library(AER) 
+[Fatalities](https://drive.google.com/file/d/1aBpUTnsMoE0EbWK2s19pZzxz2ejTPw4E/view?usp=sharing)
+
+## Motivation 
+We want to dive deeper into the data set of the U.S. Traffic Fatalities from 1982 to 1988 in 48 states (i.e., excluding Alaska and Hawaii), in which we try to figure out how different variables such as the tax on cases of beer, age, (un)employment, income, religion, daytime/nighttime driving, and relative legislative policies in minimum legal drinking age, mandatory breath test, mandatory community service contribute to the fatality of young drivers whose ages are within 15-24 years old. We also want to find possible trends by controlling specific variables. 
+
+## Hypotheses
+> * From 1982 to 1988, as years changed, accompanied by an increase in the minimum legal drinking age, the overall US young driver fatality decreased due to drunk driving.  
+* We hypothesize that young drivers have a small number of fatalities between the ages of 15 and 18, reaching the peak between the ages of 18 and 20 and then waning again between the ages of 21 and 24.   
+* Young drivers are more likely to cause fatalities when driving during the daytime than during the nighttime.    
+* Young drivers in states with high unemployment are more likely to create high drunk driving fatalities cases.    
+
+# Setup: Load the packages and the data
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(rmarkdown)
+library(tibble)
+library(readr)
+library(purrr)
+library(tidyr)
+library(broom)
+library(prettydoc)
+library(plotly)
+```
+
+```{r}
+Fatalities <- read_csv("Fatalities.csv")
+```
+
+# Hypothesis 1 - Overall Trend of US Young Driver Fatalities {.tabset .tabset-fade .tabset-pills}
+
+## Annual Trend of Drunk Driving Fatalities between 1982 and 1988
+- By using `library(dplyr)` and `library(ggplot2)`, the following chunk will **classify and analyze across years** to identify trends over time in young American driver fatalities and alcohol consumption and **visualize this trend in a line plot**. The period correspondingly indicates the possible effect of the implementation of increasing the legal drinking age.      
+- The functions (in the original R package) used are:     
+  - `sum()`    
+  - `mean()`        
+  - `min()`    
+  - `unique()`  
+- The `library(dplyr)` functions used are:    
+  - `group_by()`     
+  - `summarise()`    
+  - `arrange()`     
+  - `mutate()`  
+  - `filter()`  
+  - `distinct()`    
+  - `right_join()`    
+- The `library(ggplot2)` functions used are:      
+  - `ggplot()`        
+  - `geom_line()`         
+  - `ggtitle()`              
+
+### Relationship between Young American Driver Fatalities and Alcohol Consumption Based on Annual Classfication
+```{r,results=TRUE}
+yearly_trends <- Fatalities %>%
+  group_by(year) %>%
+  summarise(total_fatalities = sum(afatal), mean_fatalities = mean(afatal))
+
+yearly_trends
+```
+
+### Visualization of The Trend Above
+```{r}
+ggplot(yearly_trends, aes(x = year, y = total_fatalities)) +
+  geom_line(color="seagreen") +
+  ggtitle("Yearly Traffic Fatalities Trend") +
+  xlab("Year") +
+  ylab("Total Fatalities")+
+  theme_linedraw()
+```
+
+This plot shows that from 1982 to 1988, as the years changed, the overall US young driver fatalities **decreased**.  
+
+To investigate the possible contribution of the law implementation, we will further make a connection between years and changing minimum legal drinking ages in each state.
+
+### Group by States & Sort by Years
+```{r}
+fatalities_sorted <- Fatalities %>%
+  arrange(state, year)
+```
+
+### Add A New Column to Indicate When The Minimum Legal Drinking Age Changed to 21
+```{r}
+fatalities_sorted <- fatalities_sorted %>%
+  group_by(state) %>%
+  mutate(drinkage_21 = drinkage == 21)
+```
+
+### Find the First Year of The Minimum Legal Drinking Age Changed to 21 in Each State 
+```{r}
+change_to_21_per_state <- fatalities_sorted %>%
+  filter(drinkage_21) %>%
+  summarise(first_year_at_21 = min(year)) %>%
+  right_join(data.frame(state = unique(Fatalities$state)), by = "state") %>%
+  mutate(first_year_at_21 = ifelse(is.na(first_year_at_21), 'Not Changed to 21', first_year_at_21))
+
+change_to_21_per_state
+```
+
+## Annual Fluctuation of The Minimum Legal Drinking Age in Every States
+- By using `library(ggplot2)`, the following chunk will visualize every state's regulation of the drinking age annually in a **heat map** fashion.     
+- The `library(ggplot2)` functions used are:  
+  - `ggplot()`        
+  - `geom_line()`         
+  - `ggtitle()`        
+  - `scale_fill_gradient()`    
+  - `labs()`    
+  - `theme()`    
+  - `scale_x_continuous()`    
+
+### Simplified Dataset
+Since we only need the data of "state," "year," and "drinkage," we **simplify the dataset** with these remaining variables as columns. Specifically, the "drinkage" column is converted into a **measurement variable** where each combination of state and year has a corresponding minimum legal drinking age value.
+
+```{r}
+fatalities_long <- reshape2::melt(Fatalities, id.vars = c("state", "year"), measure.vars = "drinkage")
+```
+
+### Create The Heatmap
+```{r}
+ggplot(fatalities_long, aes(x = year, y = state, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "indianred", name = "Legal Drinking Age") +
+  labs(title = "Legal Drinking Age by State and Year",
+       x = "Year",
+       y = "State")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+  scale_x_continuous(breaks = unique(fatalities_long$year))
+```
+
+
+We also want to understand whether **the legislation on the drinking age would have a positive effect** on the driving fatality cases of young American drivers. Specifically, we'd like to dive deeper into which state(s) **benefited most** from changing the minimum legal drinking age to 21.
+
+
+## Find The Possible Improvement after Implementing The New Legislation on The Minimum Drinking Age
+- By using `library(dplyr)`, the following part will first group the data by state and year and summarise the number of fatalities. Then, we conclude the data again to get the total number of fatalities before and after the law implementation for each state. 
+- The functions (in the original R package) used are:     
+  - `sum()`      
+  - `mean()`          
+  - `min()`    
+  - `unique()`      
+  - `setName()`   
+- The `library(dplyr)` functions used are:  
+  - `filter()`    
+  - `select()`    
+  - `group_by()`   
+  - `summarise()`  
+  - `mutate()`  
+  - `arrange()`  
+  - `slice()`  
+
+### Exclude The Data of The States Whose First Year of Changing Its Legal Drinking Age to 21 Is 1982 and Wyoming
+This step **excludes** the states whose minimum legal drinking age **remained at 21 all the time** and **Wyoming** whose minimum legal drinking age had not changed to 21 even in 1988 (in this data set), because it's not meaningful and representative to examine their contribution to the trend of driving fatalities.
+
+```{r}
+states_to_exclude <- change_to_21_per_state %>%
+  filter(first_year_at_21 == 1982 | state == "wy") %>%
+  select(state)
+
+states_to_exclude
+
+Fatalities_filtered <- Fatalities %>%
+  filter(!state %in% states_to_exclude$state)
+```
+
+### Group by States and Years and Then Summarise Driving Fatalities
+```{r}
+fatalities_by_state_year <- Fatalities_filtered %>%
+  group_by(state, year) %>%
+  summarise(total_fatalities = sum(fatal), .groups = 'drop')
+
+first_year_at_21_lookup <- setNames(change_to_21_per_state$first_year_at_21, change_to_21_per_state$state)
+```
+
+### Classify Each Record in Driving Fatalities Based on Changing Policies as 'Before' and 'After'
+```{r}
+fatalities_by_state_year <- fatalities_by_state_year %>%
+  mutate(period = ifelse(year < first_year_at_21_lookup[state], "Before", "After"))
+fatalities_by_state_year
+```
+
+### Summarise Data Again to Get Total Driving Fatalities Before and After The Application of New Legislation 
+```{r}
+total_fatalities_by_state <- fatalities_by_state_year %>%
+  group_by(state) %>%
+  summarise(total_before = sum(total_fatalities[period == "Before"]),
+            total_after = sum(total_fatalities[period == "After"]),
+            .groups = 'drop')
+
+total_fatalities_by_state
+```
+
+### Identify States with The Most Significant Progress
+```{r}
+most_changed_state <- total_fatalities_by_state %>%
+  mutate(change = total_after - total_before) %>%
+  filter(change == min(change))
+
+most_changed_state
+```
+
+### Identify States Whose Total Driving Fatalities Decreased After The Change
+```{r}
+states_with_decreased_fatalities <- total_fatalities_by_state %>%
+  filter(total_after < total_before)
+
+states_with_decreased_fatalities
+```
+
+### Select Top 5 States with The Most Drastic Change
+```{r}
+states_with_decreased_fatalities_casenumber <- states_with_decreased_fatalities %>%
+  mutate(decrease = total_after - total_before)
+
+top_5_states_most_decrease <- states_with_decreased_fatalities_casenumber %>%
+  arrange(decrease) %>%
+  slice(1:5)
+
+top_5_states_most_decrease
+```
+
+### Overall Effectiveness Percentage of The Change of Legal Drinking Age
+```{r}
+percentage_of_good_impact <- nrow(states_with_decreased_fatalities)/(nrow(change_to_21_per_state)-nrow(states_to_exclude))
+percentage_of_good_impact
+
+change_to_21_per_state
+
+first_year_at_21_lookup <- setNames(change_to_21_per_state$first_year_at_21, change_to_21_per_state$state)
+```
+
+Based on the results above, we found that:  
+
+1. **Texas** had the most remarkable improvement after putting the new legal minimum drinking age into action.  
+2. Comparing the number of states with decreasing driving fatality cases and the total number of states (based on the exclusion condition), the **overall improvement rate** of increasing the legal minimum drinking age to 21 is **approximately 74%**, which seems quite effective.
+
+### Total Fatalities Classified by State & Year
+```{r}
+total_fatalities_by_state <- fatalities_by_state_year %>%
+  group_by(state) %>%
+  summarise(total_before = sum(total_fatalities[period == "Before"]),
+            total_after = sum(total_fatalities[period == "After"]),
+            .groups = 'drop')
+
+states_with_increased_fatalities <- total_fatalities_by_state %>%
+  filter(total_after > total_before)
+states_with_increased_fatalities
+
+total_fatalities_by_state <- Fatalities %>%
+  group_by(state, year) %>%
+  summarise(total_fatalities = sum(afatal, na.rm = TRUE),.groups = 'drop') %>%
+  mutate(category = case_when(
+    state %in% states_with_decreased_fatalities ~ "Decreased Fatalities",
+    state %in% states_with_increased_fatalities ~ "Increased Fatalities",
+    state %in% states_to_exclude ~ "Excluded",
+    TRUE ~ "Other"
+  ))
+```
+
+
+### Create the Plotly visualization
+```{r}
+custom_palette <- c("royalblue", "darkred","darkgreen")
+p <- plot_ly(data = total_fatalities_by_state, x = ~year, y = ~total_fatalities, color = ~category, colors = custom_palette, split = ~state, type = 'bar') %>% layout(
+      title = "Total Fatalities by State and Year",
+      barmode = 'group',
+      xaxis = list(title = "Year"),
+      yaxis = list(title = "Total Fatalities")
+  )
+
+p
+```
+
+As the supplementary source, this interactive bar graph displays the trend from 1982 to 1988, which organizes the data into different categories of **years and states.** If you click any year or state specifically, you can also easily recognize a diminishing trend along with the changing minimum drinking age regulation simultaneously.
+
+# Hypothesis 2 - Trend of Age-wise Driving Fatalities {.tabset .tabset-fade .tabset-pills}
+## Calculate The Sum of Every State Fatalities With The Age Classification
+- We employ `library(dplyr)` to categorize three different age groups (fatal1517, fatal1820, fatal2124) to understand the tendency of age-wise fatalities.
+- The functions (in the original R package) used are:     
+  - `sum()`  
+  - `max()`    
+- The `library(dplyr)` functions used are:   
+  - `groupby()`           
+  - `mutate()`  
+  - `summarise()`  
+  - `case_when()` 
+
+### Classify The Age Groups
+```{r}
+age_group_summary <- Fatalities %>%
+  group_by(year) %>%
+  summarise(
+    total_fatal1517 = sum(nfatal1517, na.rm = TRUE),
+    total_fatal1820 = sum(nfatal1820, na.rm = TRUE),
+    total_fatal2124 = sum(nfatal2124, na.rm = TRUE)
+  )
+
+age_group_summary
+```
+
+### Visualize The Age-wise Trend
+```{r message=FALSE}
+fig<-plot_ly(data = age_group_summary, x = ~year) %>%
+  add_trace(y = ~total_fatal1517, name = 'Ages 15-17', mode = 'lines', color = I('skyblue')) %>%
+  add_trace(y = ~total_fatal1820, name = 'Ages 18-20', mode = 'lines', color = I('royalblue')) %>%
+  add_trace(y = ~total_fatal2124, name = 'Ages 21-24', mode = 'lines', color = I('darkblue')) 
+  
+fig<-fig%>%
+  layout(title = 'Total Fatalities by Age Group Over Years',
+         xaxis = list(title = 'Year'),
+         yaxis = list(title = 'Total Fatalities'))
+
+fig
+```
+
+As the graph shows, **all** age groups of drivers had decreasing trends once stricter age standards were implemented; in this case, lifting the minimum drinking age to 21 years old is **effective for all age groups.**
+
+
+### Identify the Age Group with The Most Driving Fatality Cases
+```{r}
+age_group_summary <- age_group_summary %>%
+  mutate(
+    most_fatalities_age_group = case_when(
+      total_fatal1517 == max(total_fatal1517, total_fatal1820, total_fatal2124) ~ "15-17",
+      total_fatal1820 == max(total_fatal1517, total_fatal1820, total_fatal2124) ~ "18-20",
+      TRUE ~ "21-24"
+    )
+  )
+age_group_summary
+```
+
+As we can see here, the group of drivers whose **ages were between 21 and 24** had the **highest number** of driving fatalities. Notably, there is a **sharp, dramatic increase** in driving fatalities between the age group aged 15-17 and the age group aged 18-20.
+
+
+# Hypothesis 3 - Daytime vs. Nighttime Driving Fatalities {.tabset .tabset-fade .tabset-pills}
+- Begin by loading the necessary libraries, including `library(dplyr)` and `library(broom)`, this following chunk will first examine the numbers of daytime driving fatalities and then compare the data to figure out which young drivers may have the higher possibility during the specific time range.
+- The functions (in the original R package) used are:
+  - `sum()`  
+  - `t.test()`  
+- The `library(broom)`  functions used are:
+  - `tidy()`
+- The `library(dplyr)`  functions used are:
+  - `mutate()`  
+  - `group_by()`  
+  - `summarise()` 
+  - `do()`
+  
+## Calculate Daytime Driving Fatalities 
+This action is achieved by doing **fundamental arithmetics** -- subtracting nighttime fatalities from total fatalities.
+
+```{r}
+fatalities_data <- Fatalities %>%
+  mutate(dfatal1517 = fatal1517 - nfatal1517,
+         dfatal1820 = fatal1820 - nfatal1820,
+         dfatal2124 = fatal2124 - nfatal2124)
+```
+
+### Group Data & Generate Paired T-Test Analysis
+A paired t-test is conducted between total_daytime_fatalities and total_nighttime_fatalities for each year. Specifically, the `paired = TRUE` argument indicates that the t-test should be performed on paired samples, implying that the daytime and nighttime data are **related** (paired for each year).
+
+```{r}
+results <- fatalities_data %>%
+  group_by(year) %>%
+  summarise(
+    total_daytime_fatalities = sum(dfatal1517, dfatal1820, dfatal2124),
+    total_nighttime_fatalities = sum(nfatal1517, nfatal1820, nfatal2124)
+  ) %>%
+  do(tidy(t.test(.$total_daytime_fatalities, .$total_nighttime_fatalities, paired = TRUE)))
+
+results
+```
+
+Here, the **p-value** is extremely small (9.433894e-08) and smaller than 0.05, suggesting a **statistically significant difference** between daytime and nighttime fatalities. 
+
+In this case, Based on the data set shown, we can easily compare the figures and prove our third hypothesis that young drivers whose ages are under 25 are **more likely to cause driving fatalities when driving during the daytime** than during the nighttime.
+
+
+# Hypothesis 4 - Impact of Unemployment on Driving Fatalities {.tabset .tabset-fade .tabset-pills}
+## Create A Statistical Model & Evaluate Relative Standards
+- By using `library(broom)`, `library(purrr)`, and `library(dplyr)`, the following chunk will generate a linear regression model to test the possible relationship between the **independent variables (unemployment)** and **dependent variable (total driving fatalities)**. We will classify all statistical figures by state. 
+- The functions (in the original R package) used are:
+  - `summary()`  
+  - `lm()`
+  - `split()`
+- The `library(broom)`  functions used are:
+  - `tidy()`
+- The `library(purrr)`  functions used are:
+  - `map()`  
+  - `map_df()`
+- The `library(dplyr)`  functions used are:
+  - `mutate()`
+
+### State-wise Analysis: Linear Regression & Fitting Models for Each State
+```{r}
+plus_fatalities_young <- Fatalities %>%
+  mutate(total_young_fatalities = fatal1517 + fatal1820 + fatal2124)
+
+model <- lm(total_young_fatalities ~ unemp, data = plus_fatalities_young)
+
+model_summary <- broom::tidy(model)
+
+models_by_state <- plus_fatalities_young %>%
+  split(.$state) %>%
+  map(~lm(total_young_fatalities ~ unemp, data = .)) %>%
+  map_df(~broom::tidy(.), .id = "state")
+
+model_summary
+models_by_state
+
+valid <- subset(models_by_state, p.value < 0.05 & term == "unemp")
+valid
+```
+
+In this case, we can see in these five states, **Arizona, Georgia, Montana, Oregon, and South Carolina**, the increase in unemployment rates will positively correlate with higher driving fatalities with proof of statistical significance.
+
+
+## Visulization the linear relationships
+- Then, we employ `library(ggplot2)` to discover the possible relationships between the unemployment rates. 
+- The `library(ggplot2)` functions used are:
+  - `ggplot()`  
+  - `geom_point()`  
+  - `gg_smooth()`  
+  - `scale_fill_gradient()`  
+  - `aes()`    
+  - `facet_wrap()`    
+  - `theme_bw()`    
+  - `theme()`   
+
+### Visualize The Relationship between Unemployment Rates and Driving Fatalities
+```{r}
+ggplot(plus_fatalities_young, aes(x = unemp, y = total_young_fatalities)) +
+  geom_point(size=0.8) +
+  geom_smooth(method = "lm", color = "darkblue") +
+  labs(title = "Total Young Driver Fatalities vs. Unemployment Rate",
+       x = "Unemployment Rate",
+       y = "Total Young Driver Fatalities")
+```
+
+Thus, this graph implies a **mild, positive linear relationship** between unemployment rates and driving fatalities that as the unemployment rate increases, young drivers' fatalities will increase accordingly.
+
+### Further Visualization Based on States' Classification
+```{r}
+plot<-ggplot(plus_fatalities_young, aes(x = unemp, y = total_young_fatalities)) +
+  geom_point() +  # Scatter plot
+  geom_smooth(method = "lm", color = "blue", se = FALSE) +  # Linear model fit
+  facet_wrap(~ state) +  # Separate plot for each state
+  labs(title = "Total Young Driver Fatalities vs. Unemployment Rate by State",
+       x = "Unemployment Rate",
+       y = "Total Young Driver Fatalities") +
+  theme_bw() +  
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))  # Rotate x-axis labels for readability
+
+ggplotly(plot)
+```
+
+
+This image with multiple charts comprehensively displays the relationship between unemployment rates and driving fatalities **based on different states.**
+
+
+# Final Conclusion of The Project {.tabset .tabset-fade .tabset-pills}
+So far, we have examined this "Fatalities" data set systematically based on several hypotheses. Now, we concluded that:
+
+- Hypothesis 1: 
+  - From 1982 to 1988, the overall US young driver fatalities **decreased** as the years changed. This result proves our previous assumption. In particular, this phenomenon was attributed to legislation on the increasing minimum drinking age standard, and this policy's **overall improvement rate** is **approximately 74%**. 
+  - **Texas**, as the most benefited state, had the most remarkable improvement after implementing the new legal minimum drinking age. 
+  
+- Hypothesis 2: 
+  - The group of drivers whose **ages were between 21 and 24** had the **highest** number of driving fatalities, which is **not aligned** with our initial hypothesis. 
+  - There is a sharp, dramatic **increase** in driving fatalities between the age group aged 15-17 and the age group aged 18-20.
+  - Lifting the minimum drinking age to 21 is **effective for all age groups.**
+
+- Hypothesis 3: 
+  - Based on the examination of **p-value**, a direct indicator of the statistical significance, we found that young drivers are **more likely to cause driving fatalities during the daytime** than during the nighttime, and this conclusion confirms our third hypothesis.
+  
+- Hypothesis 4: 
+  - There is a **mild, positive linear relationship** between unemployment rates and driving fatalities of young US drivers, which also validates our speculation.
+
+
+Thanks for watching this project!
